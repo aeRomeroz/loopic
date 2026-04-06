@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Track, TimeSignature, LoopicState, InstrumentPreset } from '../types'
+import { Track, TimeSignature, LoopicState, InstrumentPreset, Step } from '../types'
 import { DEFAULT_PRESETS, ALL_PRESETS } from '../instruments/presets'
 
 interface LoopicActions {
@@ -8,6 +8,7 @@ interface LoopicActions {
   setBpm: (bpm: number) => void
   setTimeSignature: (beats: TimeSignature) => void
   toggleStep: (trackId: string, stepIndex: number) => void
+  setStepNote: (trackId: string, stepIndex: number, note: string) => void
   toggleMute: (trackId: string) => void
   setVolume: (trackId: string, volume: number) => void
   addTrack: (presetId: string) => void
@@ -15,12 +16,17 @@ interface LoopicActions {
   setShowPicker: (show: boolean) => void
 }
 
+const buildStep = (active: boolean, note: string): Step => ({ active, note })
+
 const buildTrack = (preset: InstrumentPreset, steps: number): Track => ({
   ...preset,
-  pattern: Array(steps).fill(0),
+  pattern: Array(steps).fill(null).map(() => buildStep(false, preset.note && !Array.isArray(preset.note) ? preset.note : 'C4')),
   volume: 75,
   muted: false,
 })
+
+const buildInitialPattern = (actives: number[], note: string, steps: number): Step[] =>
+  Array(steps).fill(null).map((_, i) => buildStep(actives[i] === 1, note))
 
 export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => ({
   bpm: 120,
@@ -30,10 +36,10 @@ export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => 
   currentStep: -1,
   showPicker: false,
   tracks: [
-    { ...DEFAULT_PRESETS[0], pattern: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], volume: 80, muted: false },
-    { ...DEFAULT_PRESETS[1], pattern: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], volume: 70, muted: false },
-    { ...DEFAULT_PRESETS[2], pattern: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], volume: 50, muted: false },
-    { ...DEFAULT_PRESETS[3], pattern: [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0], volume: 75, muted: false },
+    { ...DEFAULT_PRESETS[0], pattern: buildInitialPattern([1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], 'C1', 16), volume: 80, muted: false },
+    { ...DEFAULT_PRESETS[1], pattern: buildInitialPattern([0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], 'C4', 16), volume: 70, muted: false },
+    { ...DEFAULT_PRESETS[2], pattern: buildInitialPattern([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], 'C6', 16), volume: 50, muted: false },
+    { ...DEFAULT_PRESETS[3], pattern: buildInitialPattern([1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0], 'C2', 16), volume: 75, muted: false },
   ],
 
   togglePlay: () => set((s) => ({ playing: !s.playing })),
@@ -48,7 +54,7 @@ export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => 
       steps: beats * 4,
       tracks: s.tracks.map((t) => ({
         ...t,
-        pattern: Array(beats * 4).fill(0).map((_, i) => t.pattern[i] ?? 0),
+        pattern: Array(beats * 4).fill(null).map((_, i) => t.pattern[i] ?? buildStep(false, t.note && !Array.isArray(t.note) ? t.note : 'C4')),
       })),
     })),
 
@@ -56,7 +62,16 @@ export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => 
     set((s) => ({
       tracks: s.tracks.map((t) =>
         t.id === trackId
-          ? { ...t, pattern: t.pattern.map((v, i) => (i === stepIndex ? (v ? 0 : 1) : v)) }
+          ? { ...t, pattern: t.pattern.map((step, i) => i === stepIndex ? { ...step, active: !step.active } : step) }
+          : t
+      ),
+    })),
+
+  setStepNote: (trackId, stepIndex, note) =>
+    set((s) => ({
+      tracks: s.tracks.map((t) =>
+        t.id === trackId
+          ? { ...t, pattern: t.pattern.map((step, i) => i === stepIndex ? { ...step, note } : step) }
           : t
       ),
     })),

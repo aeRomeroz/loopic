@@ -6,16 +6,18 @@ import { Track } from '../types'
 function createSynth(track: Track): Tone.ToneAudioNode {
   switch (track.synth) {
     case 'MembraneSynth':
-    return new Tone.MembraneSynth(track.options as unknown as Tone.MembraneSynthOptions).toDestination()
+      return new Tone.MembraneSynth(track.options as unknown as Tone.MembraneSynthOptions).toDestination()
     case 'NoiseSynth':
-    return new Tone.NoiseSynth(track.options as unknown as Tone.NoiseSynthOptions).toDestination()
+      return new Tone.NoiseSynth(track.options as unknown as Tone.NoiseSynthOptions).toDestination()
     case 'MetalSynth':
-    return new Tone.MetalSynth(track.options as unknown as Tone.MetalSynthOptions).toDestination()
+      return new Tone.MetalSynth(track.options as unknown as Tone.MetalSynthOptions).toDestination()
+    case 'PolySynth':
+      return new Tone.PolySynth().toDestination()
     case 'PluckSynth':
-    return new Tone.PluckSynth(track.options as unknown as Tone.PluckSynthOptions).toDestination()
+      return new Tone.PluckSynth(track.options as unknown as Tone.PluckSynthOptions).toDestination()
     case 'Synth':
     default:
-    return new Tone.Synth(track.options as unknown as Tone.SynthOptions).toDestination()
+      return new Tone.Synth(track.options as unknown as Tone.SynthOptions).toDestination()
   }
 }
 
@@ -65,7 +67,8 @@ export function useTone() {
         (time) => {
           const currentTracks = useLoopicStore.getState().tracks
           currentTracks.forEach((t) => {
-            if (!t.muted && t.pattern[step]) {
+            const currentStep = t.pattern[step]
+            if (!t.muted && currentStep.active) {
               const synth = synthsRef.current[t.id]
               if (!synth) return
               try {
@@ -73,8 +76,8 @@ export function useTone() {
                   ;(synth as Tone.NoiseSynth).triggerAttackRelease('16n', time)
                 } else if (Array.isArray(t.note)) {
                   ;(synth as Tone.PolySynth).triggerAttackRelease(t.note, '8n', time)
-                } else if (t.note) {
-                  ;(synth as Tone.Synth).triggerAttackRelease(t.note, '16n', time)
+                } else {
+                  ;(synth as Tone.Synth).triggerAttackRelease(currentStep.note, '16n', time)
                 }
               } catch (e) {
                 console.warn('Tone error:', e)

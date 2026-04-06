@@ -10,7 +10,7 @@ interface InstrumentCardProps {
 export function InstrumentCard({ track }: InstrumentCardProps) {
   const { toggleMute, removeTrack, setVolume, playing, currentStep } = useLoopicStore()
 
-  const isPlaying = playing && track.pattern[currentStep] === 1 && !track.muted
+  const isPlaying = playing && track.pattern[currentStep]?.active && !track.muted
 
   return (
     <div

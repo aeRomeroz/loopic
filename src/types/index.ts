@@ -19,8 +19,13 @@ export interface InstrumentPreset {
   options: Record<string, unknown>
 }
 
+export interface Step {
+  active: boolean
+  note: string
+}
+
 export interface Track extends InstrumentPreset {
-  pattern: number[]
+  pattern: Step[]
   volume: number
   muted: boolean
 }
