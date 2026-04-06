@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useLoopicStore } from '../../store/loopicStore'
 import { Track } from '../../types'
@@ -14,64 +14,121 @@ const CELL_HEIGHT = 20
 const PIANO_WIDTH = 56
 
 export function PianoRoll({ track, onClose }: PianoRollProps) {
-  const { toggleStep, setStepNote } = useLoopicStore()
+  const { toggleStep, setStepNote, moveStep } = useLoopicStore()
   const { currentStep, playing } = useLoopicStore()
+  const gridRef = useRef<HTMLDivElement>(null)
+
   const isDragging = useRef(false)
   const dragStepIndex = useRef<number | null>(null)
+  const dragStartX = useRef(0)
   const dragStartY = useRef(0)
   const dragStartNoteIndex = useRef(0)
-  const [dragNotes, setDragNotes] = useState<Record<number, string>>({})
+  const dragStartStepIndex = useRef(0)
+
+  const [dragOverride, setDragOverride] = useState<{
+    fromStep: number
+    toStep: number
+    note: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (!gridRef.current) return
+    const activeNotes = track.pattern
+      .filter((s) => s.active)
+      .map((s) => ALL_NOTES.indexOf(s.note))
+    const lowestIndex = activeNotes.length > 0 ? Math.max(...activeNotes) : Math.floor(ALL_NOTES.length / 2)
+    const scrollTop = lowestIndex * CELL_HEIGHT - 200
+    gridRef.current.scrollTop = Math.max(0, scrollTop)
+  }, [])
 
   const getNoteIndex = (note: string) => ALL_NOTES.indexOf(note)
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, stepIndex: number) => {
       const step = track.pattern[stepIndex]
-      if (!step.active) {
-        toggleStep(track.id, stepIndex)
-        return
-      }
+      if (!step.active) return
       isDragging.current = true
       dragStepIndex.current = stepIndex
+      dragStartStepIndex.current = stepIndex
+      dragStartX.current = e.clientX
       dragStartY.current = e.clientY
       dragStartNoteIndex.current = getNoteIndex(step.note)
       e.preventDefault()
     },
-    [track, toggleStep]
+    [track]
   )
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (!isDragging.current || dragStepIndex.current === null) return
+
+      const deltaX = e.clientX - dragStartX.current
       const deltaY = e.clientY - dragStartY.current
+
       const deltaNotes = Math.round(deltaY / CELL_HEIGHT)
-      const newIndex = Math.max(
+      const deltaSteps = Math.round(deltaX / CELL_WIDTH)
+
+      const newNoteIndex = Math.max(
         0,
         Math.min(ALL_NOTES.length - 1, dragStartNoteIndex.current + deltaNotes)
       )
-      setDragNotes((prev) => ({ ...prev, [dragStepIndex.current!]: ALL_NOTES[newIndex] }))
+      const newStepIndex = Math.max(
+        0,
+        Math.min(track.pattern.length - 1, dragStartStepIndex.current + deltaSteps)
+      )
+
+      const targetOccupied =
+        newStepIndex !== dragStartStepIndex.current &&
+        track.pattern[newStepIndex].active
+
+      setDragOverride({
+        fromStep: dragStartStepIndex.current,
+        toStep: targetOccupied ? dragStartStepIndex.current : newStepIndex,
+        note: ALL_NOTES[newNoteIndex],
+      })
     },
-    []
+    [track]
   )
 
   const handleMouseUp = useCallback(() => {
-    if (!isDragging.current || dragStepIndex.current === null) return
-    const note = dragNotes[dragStepIndex.current]
-    if (note) {
-      setStepNote(track.id, dragStepIndex.current, note)
+    if (!isDragging.current || !dragOverride) {
+      isDragging.current = false
+      dragStepIndex.current = null
+      setDragOverride(null)
+      return
     }
+
+    const { fromStep, toStep, note } = dragOverride
+
+    if (fromStep !== toStep) {
+      moveStep(track.id, fromStep, toStep, note)
+    } else {
+      setStepNote(track.id, fromStep, note)
+    }
+
     isDragging.current = false
     dragStepIndex.current = null
-    setDragNotes({})
-  }, [dragNotes, setStepNote, track.id])
+    setDragOverride(null)
+  }, [dragOverride, moveStep, setStepNote, track.id])
 
-  const getStepNote = (stepIndex: number) =>
-    dragNotes[stepIndex] ?? track.pattern[stepIndex].note
+  const getStepNote = (stepIndex: number) => {
+    if (dragOverride) {
+      if (stepIndex === dragOverride.toStep) return dragOverride.note
+    }
+    return track.pattern[stepIndex].note
+  }
+
+  const isStepActive = (stepIndex: number) => {
+    if (dragOverride) {
+      if (stepIndex === dragOverride.fromStep && dragOverride.fromStep !== dragOverride.toStep) return false
+      if (stepIndex === dragOverride.toStep) return true
+    }
+    return track.pattern[stepIndex].active
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl mx-4 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
           <div className="flex items-center gap-2">
             <track.icon size={18} style={{ color: track.accent }} />
@@ -86,8 +143,8 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
           </button>
         </div>
 
-        {/* Grid */}
         <div
+          ref={gridRef}
           className="overflow-auto"
           style={{ maxHeight: '70vh' }}
           onMouseMove={handleMouseMove}
@@ -95,7 +152,6 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
           onMouseLeave={handleMouseUp}
         >
           <div className="flex" style={{ width: PIANO_WIDTH + CELL_WIDTH * track.pattern.length }}>
-            {/* Piano keys column */}
             <div className="flex-shrink-0 sticky left-0 z-10 bg-zinc-900" style={{ width: PIANO_WIDTH }}>
               {ALL_NOTES.map((note) => (
                 <div
@@ -112,9 +168,7 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
               ))}
             </div>
 
-            {/* Steps columns */}
             <div className="relative" style={{ width: CELL_WIDTH * track.pattern.length }}>
-              {/* Step headers */}
               <div className="flex sticky top-0 z-10 bg-zinc-900 border-b border-zinc-700">
                 {track.pattern.map((_, i) => (
                   <div
@@ -129,12 +183,12 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
                 ))}
               </div>
 
-              {/* Note rows */}
-              {ALL_NOTES.map((note, noteIndex) => (
+              {ALL_NOTES.map((note) => (
                 <div key={note} className="flex">
-                  {track.pattern.map((step, stepIndex) => {
+                  {track.pattern.map((_, stepIndex) => {
                     const currentNote = getStepNote(stepIndex)
-                    const isActive = step.active && currentNote === note
+                    const active = isStepActive(stepIndex)
+                    const isActiveHere = active && currentNote === note
                     const isCurrent = playing && stepIndex === currentStep
                     const isBeatStart = stepIndex % 4 === 0
 
@@ -148,9 +202,9 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
                         } ${isCurrent ? 'brightness-125' : ''}`}
                         style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
                         onMouseDown={(e) => {
-                          if (isActive) {
+                          if (isActiveHere) {
                             handleMouseDown(e, stepIndex)
-                          } else if (!step.active) {
+                          } else if (!active) {
                             toggleStep(track.id, stepIndex)
                             setStepNote(track.id, stepIndex, note)
                           } else {
@@ -158,9 +212,9 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
                           }
                         }}
                       >
-                        {isActive && (
+                        {isActiveHere && (
                           <div
-                            className="absolute inset-0.5 rounded-sm flex items-center justify-center text-xs font-medium select-none"
+                            className="absolute inset-0.5 rounded-sm flex items-center justify-center text-xs font-medium select-none cursor-grab"
                             style={{ background: track.accent }}
                           >
                             {note}
