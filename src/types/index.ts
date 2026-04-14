@@ -30,7 +30,10 @@ export interface Track extends InstrumentPreset {
   muted: boolean
 }
 
-export type TimeSignature = 3 | 4 | 6
+export type TimeSignature = {
+  numerator: number
+  denominator: number
+}
 
 export interface LoopicState {
   bpm: number

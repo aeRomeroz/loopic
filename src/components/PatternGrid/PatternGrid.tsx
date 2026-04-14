@@ -6,7 +6,9 @@ interface PatternGridProps {
 }
 
 export function PatternGrid({ track }: PatternGridProps) {
-  const { currentStep, playing, toggleStep } = useLoopicStore()
+  const { currentStep, playing, toggleStep, beatsPerMeasure } = useLoopicStore()
+
+  const stepsPerBeat = 16 / beatsPerMeasure.denominator
 
   return (
     <div
@@ -15,7 +17,7 @@ export function PatternGrid({ track }: PatternGridProps) {
     >
       {track.pattern.map((step, i) => {
         const isCurrent = playing && i === currentStep
-        const isBeatStart = i % 4 === 0
+        const isBeatStart = i % stepsPerBeat === 0
 
         return (
           <button

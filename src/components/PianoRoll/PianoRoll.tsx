@@ -15,7 +15,7 @@ const PIANO_WIDTH = 56
 
 export function PianoRoll({ track, onClose }: PianoRollProps) {
   const { toggleStep, setStepNote, moveStep } = useLoopicStore()
-  const { currentStep, playing } = useLoopicStore()
+  const { currentStep, playing, beatsPerMeasure } = useLoopicStore()
   const gridRef = useRef<HTMLDivElement>(null)
 
   const isDragging = useRef(false)
@@ -30,6 +30,8 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
     toStep: number
     note: string
   } | null>(null)
+
+  const stepsPerBeat = 16 / beatsPerMeasure.denominator
 
   useEffect(() => {
     if (!gridRef.current) return
@@ -174,11 +176,11 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
                   <div
                     key={i}
                     className={`flex-shrink-0 flex items-center justify-center text-xs border-r transition-colors ${
-                      i % 4 === 0 ? 'text-zinc-300 border-zinc-600' : 'text-zinc-600 border-zinc-800'
+                      i % stepsPerBeat === 0 ? 'text-zinc-300 border-zinc-600' : 'text-zinc-600 border-zinc-800'
                     } ${playing && i === currentStep ? 'bg-emerald-900/40 text-emerald-400' : 'bg-zinc-900'}`}
                     style={{ width: CELL_WIDTH, height: 24 }}
                   >
-                    {i % 4 === 0 ? i / 4 + 1 : ''}
+                    {i % stepsPerBeat === 0 ? Math.floor(i / stepsPerBeat) + 1 : ''}
                   </div>
                 ))}
               </div>
@@ -190,7 +192,7 @@ export function PianoRoll({ track, onClose }: PianoRollProps) {
                     const active = isStepActive(stepIndex)
                     const isActiveHere = active && currentNote === note
                     const isCurrent = playing && stepIndex === currentStep
-                    const isBeatStart = stepIndex % 4 === 0
+                    const isBeatStart = stepIndex % stepsPerBeat === 0
 
                     return (
                       <div

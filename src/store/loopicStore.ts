@@ -32,7 +32,7 @@ const buildInitialPattern = (actives: number[], note: string, steps: number): St
 export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => ({
     bpm: 120,
     steps: 16,
-    beatsPerMeasure: 4,
+    beatsPerMeasure: { numerator: 4, denominator: 4 },
     playing: false,
     currentStep: -1,
     showPicker: false,
@@ -49,15 +49,19 @@ export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => 
 
     setBpm: (bpm) => set({ bpm }),
 
-    setTimeSignature: (beats) =>
+    setTimeSignature: (timeSig: TimeSignature) => {
+        const stepsPerBeat = 16 / timeSig.denominator
+        const newSteps = timeSig.numerator * stepsPerBeat
         set((s) => ({
-            beatsPerMeasure: beats,
-            steps: beats * 4,
+            beatsPerMeasure: timeSig,
+            steps: newSteps,
+            currentStep: Math.min(s.currentStep, newSteps - 1),
             tracks: s.tracks.map((t) => ({
                 ...t,
-                pattern: Array(beats * 4).fill(null).map((_, i) => t.pattern[i] ?? buildStep(false, t.note && !Array.isArray(t.note) ? t.note : 'C4')),
+                pattern: Array(newSteps).fill(null).map((_, i) => t.pattern[i] ?? buildStep(false, t.note && !Array.isArray(t.note) ? t.note : 'C4')),
             })),
-        })),
+        }))
+    },
 
     toggleStep: (trackId, stepIndex) =>
         set((s) => ({
@@ -92,7 +96,7 @@ export const useLoopicStore = create<LoopicState & LoopicActions>((set, get) => 
         })),
 
     addTrack: (presetId) => {
-        const { tracks, steps } = get()
+        const { tracks } = get()
         const preset = ALL_PRESETS.find((p) => p.id === presetId)
         if (!preset || tracks.find((t) => t.id === presetId)) return
         set((s) => ({
